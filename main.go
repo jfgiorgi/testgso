@@ -17,6 +17,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
+// parts copied from Tailscale/Wireguard
+
 const (
 	// TODO: upstream to x/sys/unix
 	socketOptionLevelUDP   = 17
@@ -128,7 +130,7 @@ func main() {
 	}
 	gsoV6, groV6 := supportsUDPOffload(v6conn)
 
-	fmt.Println("Kernel dectection:")
+	fmt.Println("Kernel detection:")
 	fmt.Printf("  IPv4 GSO: %t, GRO: %t\n", gsoV4, groV4)
 	fmt.Printf("  IPv6 GSO: %t, GRO: %t\n", gsoV6, groV6)
 	fmt.Println("Write dectection:")
@@ -195,6 +197,6 @@ func testWrite(conn *net.UDPConn, addr net.IP, port int, gso bool, br batchWrite
 	if gso && err != nil && errShouldDisableUDPGSO(err) {
 		fmt.Println("  gso issue detected")
 	}
-	fmt.Printf("  n,noob,err = %d,%d,%s\n", n, noob, err)
+	fmt.Printf("  n,nb,err = %d,%d,%s\n", n, noob, err)
 
 }

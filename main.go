@@ -3,13 +3,13 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"runtime"
 	"strconv"
-	"syscall"
 	"unsafe"
 
 	"golang.org/x/net/ipv4"
@@ -90,21 +90,49 @@ func setGSOSize(control *[]byte, gsoSize uint16) {
 	*control = (*control)[:existingLen+space]
 }
 
+var optV4remote = flag.String("r4", "127.0.0.1:0", "remote v4 addr")
+var optV6remote = flag.String("r6", "["+net.IPv6loopback.String()+"]:0", "remote v6 addr")
+
+func parseRemote(remote string) (net.IP, int) {
+	host, port, err := net.SplitHostPort(remote)
+	if err != nil {
+		log.Fatalf("bad remote %v", remote)
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil {
+		log.Fatalf("bad remote port: %v", remote)
+	}
+	return net.ParseIP(host), p
+}
+
 func main() {
 
 	if runtime.GOOS != "linux" {
 		log.Fatal("only for Linux!")
 	}
 
-	v4conn, port4, err := listenNet("udp4", 0)
-	if err != nil && !errors.Is(err, syscall.EAFNOSUPPORT) {
+	flag.Parse()
+
+	remote4, port4 := parseRemote(*optV4remote)
+	fmt.Printf("remote v4 = %s:%d\n", remote4, port4)
+	remote6, port6 := parseRemote(*optV6remote)
+	fmt.Printf("remote v6 = %s:%d\n", remote6, port6)
+
+	v4conn, localport4, err := listenNet("udp4", 0)
+	if err != nil {
 		log.Fatal(err)
+	}
+	if port4 == 0 {
+		port4 = localport4
 	}
 	gsoV4, _ := supportsUDPOffload(v4conn)
 
-	v6conn, port6, err := listenNet("udp6", 0)
-	if err != nil && !errors.Is(err, syscall.EAFNOSUPPORT) {
+	v6conn, localport6, err := listenNet("udp6", 0)
+	if err != nil {
 		log.Fatal(err)
+	}
+	if port6 == 0 {
+		port6 = localport6
 	}
 	gsoV6, _ := supportsUDPOffload(v6conn)
 
@@ -113,10 +141,10 @@ func main() {
 	fmt.Printf("  IPv6 GSO: %t\n", gsoV6)
 	size := 4000
 	if gsoV4 {
-		doTests("IPv4", size, v4conn, net.IPv4(127, 0, 0, 1), port4, ipv4.NewPacketConn(v4conn))
+		doTests("IPv4", size, v4conn, remote4, port4, ipv4.NewPacketConn(v4conn))
 	}
 	if gsoV6 {
-		doTests("IPv6", size, v6conn, net.IPv6loopback, port6, ipv6.NewPacketConn(v6conn))
+		doTests("IPv6", size, v6conn, remote6, port6, ipv6.NewPacketConn(v6conn))
 	}
 
 }
@@ -163,7 +191,7 @@ func testWrite(size int, conn *net.UDPConn, addr net.IP, port int, gso bool, br 
 	}
 	oob := make([]byte, 0, unix.CmsgSpace(sizeOfGSOData))
 	if gso {
-		setGSOSize(&oob, uint16(size))
+		setGSOSize(&oob, 1200) // should be maxmtu for remote ?
 	}
 	msg := []ipv6.Message{{
 		Buffers: buffs,

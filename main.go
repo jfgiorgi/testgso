@@ -100,17 +100,17 @@ func main() {
 	if err != nil && !errors.Is(err, syscall.EAFNOSUPPORT) {
 		log.Fatal(err)
 	}
-	gsoV4, groV4 := supportsUDPOffload(v4conn)
+	gsoV4, _ := supportsUDPOffload(v4conn)
 
 	v6conn, port6, err := listenNet("udp6", 0)
 	if err != nil && !errors.Is(err, syscall.EAFNOSUPPORT) {
 		log.Fatal(err)
 	}
-	gsoV6, groV6 := supportsUDPOffload(v6conn)
+	gsoV6, _ := supportsUDPOffload(v6conn)
 
 	fmt.Println("Kernel detection:")
-	fmt.Printf("  IPv4 GSO: %t, GRO: %t\n", gsoV4, groV4)
-	fmt.Printf("  IPv6 GSO: %t, GRO: %t\n", gsoV6, groV6)
+	fmt.Printf("  IPv4 GSO: %t\n", gsoV4)
+	fmt.Printf("  IPv6 GSO: %t\n", gsoV6)
 	fmt.Println("Write dectection:")
 	size := 4000
 	testWrite(size, v4conn, net.IPv4(127, 0, 0, 1), port4, gsoV4, nil)

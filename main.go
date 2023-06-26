@@ -37,6 +37,7 @@ func supportsUDPOffload(conn *net.UDPConn) (txOffload, rxOffload bool) {
 			return
 		}
 		txOffload = true
+		// not sure that one is correct
 		opt, errSyscall := unix.GetsockoptInt(int(fd), unix.IPPROTO_UDP, socketOptionUDPGRO)
 		if errSyscall != nil {
 			return
@@ -49,32 +50,9 @@ func supportsUDPOffload(conn *net.UDPConn) (txOffload, rxOffload bool) {
 	return txOffload, rxOffload
 }
 
-// controlFn is the callback function signature from net.ListenConfig.Control.
-// It is used to apply platform specific configuration to the socket prior to
-// bind.
-type controlFn func(network, address string, c syscall.RawConn) error
-
-// controlFns is a list of functions that are called from the listen config
-// that can apply socket options.
-var controlFns = []controlFn{}
-
-// listenConfig returns a net.ListenConfig that applies the controlFns to the
-// socket prior to bind. This is used to apply socket buffer sizing and packet
-// information OOB configuration for sticky sockets.
-func listenConfig() *net.ListenConfig {
-	return &net.ListenConfig{
-		Control: func(network, address string, c syscall.RawConn) error {
-			for _, fn := range controlFns {
-				if err := fn(network, address, c); err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	}
-}
 func listenNet(network string, port int) (*net.UDPConn, int, error) {
-	conn, err := listenConfig().ListenPacket(context.Background(), network, ":"+strconv.Itoa(port))
+	lc := &net.ListenConfig{}
+	conn, err := lc.ListenPacket(context.Background(), network, ":"+strconv.Itoa(port))
 	if err != nil {
 		return nil, 0, err
 	}
@@ -134,11 +112,12 @@ func main() {
 	fmt.Printf("  IPv4 GSO: %t, GRO: %t\n", gsoV4, groV4)
 	fmt.Printf("  IPv6 GSO: %t, GRO: %t\n", gsoV6, groV6)
 	fmt.Println("Write dectection:")
-	testWrite(v4conn, net.IPv4(127, 0, 0, 1), port4, gsoV4, nil)
-	testWrite(v6conn, net.IPv6loopback, port6, gsoV6, nil)
+	size := 4000
+	testWrite(size, v4conn, net.IPv4(127, 0, 0, 1), port4, gsoV4, nil)
+	testWrite(size, v6conn, net.IPv6loopback, port6, gsoV6, nil)
 	fmt.Println("Write with batch:")
-	testWrite(v4conn, net.IPv4(127, 0, 0, 1), port4, gsoV4, ipv4.NewPacketConn(v4conn))
-	testWrite(v6conn, net.IPv6loopback, port6, gsoV6, ipv6.NewPacketConn(v6conn))
+	testWrite(size, v4conn, net.IPv4(127, 0, 0, 1), port4, gsoV4, ipv4.NewPacketConn(v4conn))
+	testWrite(size, v6conn, net.IPv6loopback, port6, gsoV6, ipv6.NewPacketConn(v6conn))
 
 }
 func errShouldDisableUDPGSO(err error) bool {
@@ -158,8 +137,8 @@ type batchWriter interface {
 	WriteBatch([]ipv6.Message, int) (int, error)
 }
 
-func testWrite(conn *net.UDPConn, addr net.IP, port int, gso bool, br batchWriter) {
-	buff := make([]byte, 2000)
+func testWrite(size int, conn *net.UDPConn, addr net.IP, port int, gso bool, br batchWriter) {
+	buff := make([]byte, size)
 	buffs := make([][]byte, 1)
 	buffs[0] = buff
 	// remote = self
@@ -169,7 +148,7 @@ func testWrite(conn *net.UDPConn, addr net.IP, port int, gso bool, br batchWrite
 	}
 	oob := make([]byte, 0, unix.CmsgSpace(sizeOfGSOData))
 	if gso {
-		setGSOSize(&oob, 2000)
+		setGSOSize(&oob, uint16(size))
 	}
 	msg := []ipv6.Message{{
 		Buffers: buffs,
@@ -197,6 +176,10 @@ func testWrite(conn *net.UDPConn, addr net.IP, port int, gso bool, br batchWrite
 	if gso && err != nil && errShouldDisableUDPGSO(err) {
 		fmt.Println("  gso issue detected")
 	}
-	fmt.Printf("  n,nb,err = %d,%d,%s\n", n, noob, err)
+	errmsg := "nil"
+	if err != nil {
+		errmsg = err.Error()
+	}
+	fmt.Printf("  n,nb,err = %d,%d,%s\n", n, noob, errmsg)
 
 }

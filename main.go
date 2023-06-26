@@ -111,15 +111,30 @@ func main() {
 	fmt.Println("Kernel detection:")
 	fmt.Printf("  IPv4 GSO: %t\n", gsoV4)
 	fmt.Printf("  IPv6 GSO: %t\n", gsoV6)
-	fmt.Println("Write dectection:")
 	size := 4000
-	testWrite(size, v4conn, net.IPv4(127, 0, 0, 1), port4, gsoV4, nil)
-	testWrite(size, v6conn, net.IPv6loopback, port6, gsoV6, nil)
-	fmt.Println("Write with batch:")
-	testWrite(size, v4conn, net.IPv4(127, 0, 0, 1), port4, gsoV4, ipv4.NewPacketConn(v4conn))
-	testWrite(size, v6conn, net.IPv6loopback, port6, gsoV6, ipv6.NewPacketConn(v6conn))
+	if gsoV4 {
+		doTests("IPv4", size, v4conn, net.IPv4(127, 0, 0, 1), port4, ipv4.NewPacketConn(v4conn))
+	}
+	if gsoV6 {
+		doTests("IPv6", size, v6conn, net.IPv6loopback, port6, ipv6.NewPacketConn(v6conn))
+	}
 
 }
+
+func doTests(version string, size int, conn *net.UDPConn, addr net.IP, port int, br batchWriter) {
+	fmt.Println(version, "with GSO:")
+	fmt.Printf("  Write:")
+	testWrite(size, conn, addr, port, true, nil)
+	fmt.Printf("  Write with batch:")
+	testWrite(size, conn, addr, port, true, br)
+
+	fmt.Println(version, "without GSO:")
+	fmt.Printf("  Write:")
+	testWrite(size, conn, addr, port, false, nil)
+	fmt.Printf("  Write with batch:")
+	testWrite(size, conn, addr, port, false, br)
+}
+
 func errShouldDisableUDPGSO(err error) bool {
 	var serr *os.SyscallError
 	if errors.As(err, &serr) {

@@ -32,7 +32,8 @@ func supportsUDPOffload(conn *net.UDPConn) (txOffload, rxOffload bool) {
 		return
 	}
 	err = rc.Control(func(fd uintptr) {
-		_, errSyscall := unix.GetsockoptInt(int(fd), unix.IPPROTO_UDP, socketOptionUDPSegment)
+		size, errSyscall := unix.GetsockoptInt(int(fd), unix.IPPROTO_UDP, socketOptionUDPSegment)
+		fmt.Println("gso size = ", size)
 		if errSyscall != nil {
 			return
 		}

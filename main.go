@@ -19,27 +19,20 @@ import (
 
 // parts copied from Tailscale/Wireguard
 
-const (
-	// TODO: upstream to x/sys/unix
-	socketOptionLevelUDP   = 17
-	socketOptionUDPSegment = 103
-	socketOptionUDPGRO     = 104
-)
-
 func supportsUDPOffload(conn *net.UDPConn) (txOffload, rxOffload bool) {
 	rc, err := conn.SyscallConn()
 	if err != nil {
 		return
 	}
 	err = rc.Control(func(fd uintptr) {
-		size, errSyscall := unix.GetsockoptInt(int(fd), unix.IPPROTO_UDP, socketOptionUDPSegment)
+		size, errSyscall := unix.GetsockoptInt(int(fd), unix.IPPROTO_UDP, unix.UDP_SEGMENT)
 		fmt.Println("gso size = ", size)
 		if errSyscall != nil {
 			return
 		}
 		txOffload = true
 		// not sure that one is correct
-		opt, errSyscall := unix.GetsockoptInt(int(fd), unix.IPPROTO_UDP, socketOptionUDPGRO)
+		opt, errSyscall := unix.GetsockoptInt(int(fd), unix.IPPROTO_UDP, unix.UDP_GRO)
 		if errSyscall != nil {
 			return
 		}
@@ -84,8 +77,8 @@ func setGSOSize(control *[]byte, gsoSize uint16) {
 	*control = (*control)[:cap(*control)]
 	gsoControl := (*control)[existingLen:]
 	hdr := (*unix.Cmsghdr)(unsafe.Pointer(&(gsoControl)[0]))
-	hdr.Level = socketOptionLevelUDP
-	hdr.Type = socketOptionUDPSegment
+	hdr.Level = unix.IPPROTO_UDP
+	hdr.Type = unix.UDP_SEGMENT
 	hdr.SetLen(unix.CmsgLen(sizeOfGSOData))
 	copy((gsoControl)[unix.SizeofCmsghdr:], unsafe.Slice((*byte)(unsafe.Pointer(&gsoSize)), sizeOfGSOData))
 	*control = (*control)[:existingLen+space]

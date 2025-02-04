@@ -119,7 +119,7 @@ func main() {
 	if port4 == 0 {
 		port4 = localport4
 	}
-	gsoV4, _ := supportsUDPOffload(v4conn)
+	gsoV4, rsoV4 := supportsUDPOffload(v4conn)
 
 	v6conn, localport6, err := listenNet("udp6", 0)
 	if err != nil {
@@ -128,11 +128,11 @@ func main() {
 	if port6 == 0 {
 		port6 = localport6
 	}
-	gsoV6, _ := supportsUDPOffload(v6conn)
+	gsoV6, rsov6 := supportsUDPOffload(v6conn)
 
 	fmt.Println("Kernel detection:")
-	fmt.Printf("  IPv4 GSO: %t\n", gsoV4)
-	fmt.Printf("  IPv6 GSO: %t\n", gsoV6)
+	fmt.Printf("  IPv4 GSO: %t - %t\n", gsoV4, rsoV4)
+	fmt.Printf("  IPv6 GSO: %t - %t\n", gsoV6, rsov6)
 	size := 4000
 	if gsoV4 {
 		doTests("IPv4", size, v4conn, remote4, port4, ipv4.NewPacketConn(v4conn))
